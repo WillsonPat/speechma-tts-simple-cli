@@ -1,9 +1,14 @@
 import requests as req
+from pydub import AudioSegment
+import numpy as np
+import sounddevice as sd
 import json
 import sys
-import os
-from datetime import datetime
+import io
+import threading
+import queue
 from typing import Dict
+
 
 # Function to print colored text
 def print_colored(text: str, color: str) -> None:
@@ -50,8 +55,8 @@ def input_colored(prompt: str, color: str) -> str:
     colored_prompt: str = f"{color_code}{prompt}\033[0m"
     return input(colored_prompt)
 
-# Load voices from the JSON file
-def load_voices():
+def load_voices() -> Dict | None:
+    """Load voices from the JSON file"""
     try:
         with open('voices.json', 'r') as f:
             return json.load(f)
@@ -62,8 +67,8 @@ def load_voices():
         print_colored("Error: voices.json is not a valid JSON file.", "red")
         return {}
 
-# Recursively display voices in an enumerated format
-def display_voices(voices, prefix=""):
+def display_voices(voices: map | None, prefix: str = "") -> int:
+    """Recursively display voices in an enumerated format"""
     if not voices:
         print_colored("Error: No voices available.", "red")
         return 0
@@ -79,8 +84,8 @@ def display_voices(voices, prefix=""):
             print(f"{index}- {prefix}{key}")
     return index
 
-# Recursively get the selected voice ID based on user input
-def get_voice_id(voices, choice, current_index=0):
+def get_voice_id(voices, choice: int, current_index:int = 0):
+    """Recursively get the selected voice ID based on user input"""
     for key, value in voices.items():
         if isinstance(value, dict):
             result, current_index = get_voice_id(value, choice, current_index)
@@ -92,90 +97,178 @@ def get_voice_id(voices, choice, current_index=0):
                 return value, current_index
     return None, current_index
 
-# Function to get audio from the server
-def get_audio(url, data, headers):
-    try:
-        json_data = json.dumps(data)
-        response = req.post(url, data=json_data, headers=headers)
-        response.raise_for_status()
-        if response.headers.get('Content-Type') == 'audio/mpeg':
-            return response.content
-        else:
-            print_colored(f"Unexpected response format: {response.headers.get('Content-Type')}", "red")
-            return None
-    except req.exceptions.RequestException as e:
-        if e.response:
-            print_colored(f"Server response: {e.response.text}", "red")
-        print_colored(f"Request failed: {e}", "red")
-        return None
-    except Exception as e:
-        print_colored(f"An unexpected error occurred: {e}", "red")
-        return None
+class TtsProducer:
+    """Text to speech producer that obtains mp3 in a separate thread and passes them to a consumer"""
+    def __init__(self, voice_id, nextConsumer):
+        self.session = req.Session()
+        self.nextConsumer = nextConsumer
+        self.voice_id = voice_id
+        self.url = 'https://speechma.com/com.api/tts-api.php'
+        self.session.headers = {
+            'Host': 'speechma.com',
+            'Sec-Ch-Ua-Platform': 'Windows',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Sec-Ch-Ua': '"Chromium";v="131", "Not_A Brand";v="24"',
+            'Content-Type': 'application/json',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.140 Safari/537.36',
+            'Accept': '*/*',
+            'Origin': 'https://speechma.com',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Dest': 'empty',
+            'Referer': 'https://speechma.com/',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Priority': 'u=1, i'
+        }
+        self.text_queue = queue.Queue()
+        self.consumer_thread = threading.Thread(target=self.text_consumer)
+        self.consumer_thread.daemon = True  # Allows thread to exit when the main program does
+        self.consumer_thread.start()
 
-# Function to save audio to a file
-def save_audio(response, directory, chunk_num):
-    if response:
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        file_path = os.path.join(directory, f"audio_chunk_{chunk_num}.mp3")
-        try:
-            with open(file_path, 'wb') as f:
-                f.write(response)
-            print_colored(f"Audio saved to {file_path}", "green")
-        except IOError as e:
-            print_colored(f"Error saving audio: {e}", "red")
-    else:
-        print_colored("No audio data to save", "red")
+    def text_consumer(self):
+        """Consume text data from the queue, generate mp3 and pass it next consumer."""
 
-# Function to split text into chunks
-def split_text(text, chunk_size=1000):
-    if not text:
-        print_colored("Error: No text provided to split.", "red")
-        return []
+        def get_audio(url: str, data) -> bytes | None:
+            """Function to get audio from the server"""
+            try:
+                json_data = json.dumps(data)
+                response = self.session.post(url, data=json_data)
+                response.raise_for_status()
+                if response.headers.get('Content-Type') == 'audio/mpeg':
+                    return response.content
+                else:
+                    print_colored(f"Unexpected response format: {response.headers.get('Content-Type')}", "red")
+                    return None
+            except req.exceptions.RequestException as e:
+                if e.response:
+                    print_colored(f"Server response: {e.response.text}", "red")
+                print_colored(f"Request failed: {e}", "red")
+                return None
+            except Exception as e:
+                print_colored(f"An unexpected error occurred: {e}", "red")
+                return None
 
-    chunks = []
-    while len(text) > 0:
-        if len(text) <= chunk_size:
-            chunks.append(text)
-            break
-        chunk = text[:chunk_size]
-        last_full_stop = chunk.rfind('.')
-        last_comma = chunk.rfind(',')
-        split_index = last_full_stop if last_full_stop != -1 else last_comma
-        if split_index == -1:
-            split_index = chunk_size
-        else:
-            split_index += 1
-        chunks.append(text[:split_index])
-        text = text[split_index:].lstrip()
-    return chunks
+        def split_text(text: str, chunk_size: int = 1000):
+            """Function to split text into chunks"""
+            if not text:
+                print_colored("Error: No text provided to split.", "red")
+                return []
 
-# Function to validate text
-def validate_text(text):
-    return ''.join(char for char in text if ord(char) < 128)
+            chunks = []
+            while len(text) > 0:
+                if len(text) <= chunk_size:
+                    chunks.append(text)
+                    break
+                chunk = text[:chunk_size]
+                last_full_stop = chunk.rfind('.')
+                last_comma = chunk.rfind(',')
+                split_index = last_full_stop if last_full_stop != -1 else last_comma
+                if split_index == -1:
+                    split_index = chunk_size
+                else:
+                    split_index += 1
+                chunks.append(text[:split_index])
+                text = text[split_index:].lstrip()
+            return chunks
 
-# Function to get multiline input
-def get_multiline_input(prompt="Enter your text (press Enter on an empty line to finish):"):
-    print_colored(prompt, "cyan")
-    lines = []
-    while True:
-        line = input()
-        if line == "END":
-            break
-        lines.append(line)
-    return " ".join(lines)
+        def validate_text(text: str):
+            """Function to validate text"""
+            return ''.join(char for char in text if ord(char) < 128)
+        
+        def get_mp3_data(text_data):
+            """Obtains mp3 data from Speechma"""
+            text = validate_text(text_data)     
+            chunks = split_text(text, chunk_size=1000)
+            if not chunks:
+                print_colored("\nError: Could not split text into chunks. Skipping text data {text}.", "red")
+                return
 
-# Function to prompt for graceful exit
-def prompt_graceful_exit():
-    while True:
-        choice = input_colored("\nDo you want to exit? (y/n): ", "blue").lower()
-        if choice == "y":
-            print_colored("Exiting gracefully...", "magenta")
-            sys.exit(0)
-        elif choice == "n":
-            return
-        else:
-            print_colored("Invalid choice. Please enter 'y' or 'n'.", "red")
+            for i, chunk in enumerate(chunks, start=1):
+                print_colored(f"\nProcessing chunk {i}...", "yellow")
+                data = {
+                    "text": chunk.replace("'", "").replace('"', '').replace("&", "and"),
+                    "voice": self.voice_id
+                }
+
+                max_retries = 3
+                for retry in range(max_retries):
+                    response = get_audio(self.url, data)
+                    if response:
+                        return response
+                    
+                    print_colored(f"Retry {retry + 1} for chunk {i}...", "yellow")
+                else:
+                    print_colored(f"Failed to process chunk {i} after {max_retries} retries.", "red")
+
+        while True:
+            try:
+                text = self.text_queue.get()
+                if text is None:  # Exit signal
+                    break
+                mp3_data = get_mp3_data(text)
+                if mp3_data is not None:
+                    self.nextConsumer.put(mp3_data)
+                self.text_queue.task_done()
+            except Exception as e:
+                print_colored(f"Exception while processing TTS data: {e}", "red")
+
+    def put(self, text_data):
+        """Add text data to the queue for playback."""
+        self.text_queue.put(text_data)
+
+    def wait_for_completion(self):
+        """Wait until all text_data is processed and the next consumer is ready"""
+        self.text_queue.join()
+        self.text_queue.put(None)  # Signal the consumer to exit
+        self.consumer_thread.join()  # Wait for consumer thread to finish
+        if self.nextConsumer is not None:
+            self.nextConsumer.wait_for_completion()
+
+class AudioPlayer:
+    """Audio player working on a separate thread"""
+    def __init__(self):
+        self.audio_queue = queue.Queue()
+        self.consumer_thread = threading.Thread(target=self.audio_consumer)
+        self.consumer_thread.daemon = True  # Allows thread to exit when the main program does
+        self.consumer_thread.start()
+
+    def audio_consumer(self):
+        """Consume audio data from the queue and play it."""
+
+        def play_audio(mp3_data):
+            """Plays an audio encoded as mp3 data"""
+            byte_io = io.BytesIO(mp3_data)
+            audio = AudioSegment.from_file(byte_io, format='mp3')
+            samples = np.array(audio.get_array_of_samples())
+            
+            if audio.channels == 2:
+                samples = samples.reshape((-1, 2))
+            
+            # using sounddevice library instead of pydub since the latter
+            # uses simple audio which crashes on later python versions
+            sd.play(samples, samplerate=audio.frame_rate)
+            sd.wait()
+
+        while True:
+            try:
+                mp3_byte_data = self.audio_queue.get()
+                if mp3_byte_data is None:  # Exit signal
+                    break
+                play_audio(mp3_byte_data)
+                self.audio_queue.task_done()
+            except Exception as e:
+                print_colored(f"Exception while processing mp3 data: {e}", "red")
+
+    def put(self, mp3_byte_data):
+        """Add audio data to the queue for playback."""
+        self.audio_queue.put(mp3_byte_data)
+
+    def wait_for_completion(self):
+        """Wait until all audio tasks are done."""
+        self.audio_queue.join()
+        self.audio_queue.put(None)  # Signal the consumer to exit
+        self.consumer_thread.join()  # Wait for consumer thread to finish
 
 # Main function
 def main():
@@ -201,69 +294,31 @@ def main():
         print_colored("Error: Invalid voice choice. Exiting.", "red")
         return
 
-    text = get_multiline_input().replace("  ", " ")
-    
-    if not text:
-        print_colored("Error: No text provided. Exiting.", "red")
-        return
-    elif len(text) <= 9 :
-        print_colored("Error: The text must be more than 9 characters. Exiting.", "red")
-        return
+    audioPlayer = AudioPlayer()
+    ttsProducer = TtsProducer(voice_id, audioPlayer)
 
-    text = validate_text(text)
+    print("\nInteractive input mode:")
+    print("  1. Type sentences to speak out loud.")
+    print("  2. Each line is processed separately.")
+    print("  3. An empty line exits the program.")
+    print_colored("\nWaiting for user input...", "green")
+    try:
+        while True:
+            text = input()
+            
+            if not text:
+                print_colored("End of text stream. Exiting gracefully.", "yellow")
+                return
 
-    url = 'https://speechma.com/com.api/tts-api.php'
-    headers = {
-        'Host': 'speechma.com',
-        'Sec-Ch-Ua-Platform': 'Windows',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Sec-Ch-Ua': '"Chromium";v="131", "Not_A Brand";v="24"',
-        'Content-Type': 'application/json',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.140 Safari/537.36',
-        'Accept': '*/*',
-        'Origin': 'https://speechma.com',
-        'Sec-Fetch-Site': 'same-origin',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Dest': 'empty',
-        'Referer': 'https://speechma.com/',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Priority': 'u=1, i'
-    }
-
-    chunks = split_text(text, chunk_size=1000)
-    if not chunks:
-        print_colored("Error: Could not split text into chunks. Exiting.", "red")
-        return
-
-    timestamp = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-    directory = os.path.join("audio", timestamp)
-    
-    for i, chunk in enumerate(chunks, start=1):
-        print_colored(f"\nProcessing chunk {i}...", "yellow")
-        data = {
-            "text": chunk.replace("'", "").replace('"', '').replace("&", "and"),
-            "voice": voice_id
-        }
-
-        max_retries = 3
-        for retry in range(max_retries):
-            response = get_audio(url, data, headers)
-            if response:
-                save_audio(response, directory, i)
-                break
-            else:
-                print_colored(f"Retry {retry + 1} for chunk {i}...", "yellow")
-        else:
-            print_colored(f"Failed to process chunk {i} after {max_retries} retries.", "red")
-
-    prompt_graceful_exit()
+            ttsProducer.put(text)
+    finally:
+        print_colored("Waiting for producers to finish. Press Ctrl + C to abort.", "yellow")
+        ttsProducer.wait_for_completion()
 
 # Main execution
 if __name__ == "__main__":
     try:
-        while True:
-            main()
+        main()
     except KeyboardInterrupt:
         print_colored("\nExiting gracefully...", "yellow")
         sys.exit(0)
