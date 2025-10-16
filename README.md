@@ -1,6 +1,6 @@
-# Speechma-API
+# speechma-tts-simple-cli
 
-This repository provides a Python program that uses the Speechma API to convert text into speech. It allows users to select from multiple voices, dialects, and languages, and bypasses the 2000-character limit by splitting the input text into manageable chunks. The program sanitizes the text, handles punctuation for better speech flow, and saves the resulting audio in MP3 format.
+This repository provides a Python program that uses the Speechma API to convert text into speech. It allows users to select from multiple voices, dialects, and languages, and bypasses the 2000-character limit by splitting the input text into manageable chunks. The program sanitizes the text, handles punctuation for better speech flow, and plays the audio as soon as it is received. Multiple chunks are played sequentially without overlap.
 
 ## Features
 
@@ -8,7 +8,7 @@ This repository provides a Python program that uses the Speechma API to convert 
 - **Text Chunking:** The input text is split into chunks to bypass the 2000-character limit imposed by the Speechma API.
 - **Input Sanitization:** Non-ASCII characters are removed from the input to ensure compatibility with the API.
 - **Punctuation Handling:** Punctuation marks like full stops and commas are handled properly for clearer, more natural speech.
-- **Audio Download:** The generated audio is saved as an MP3 file for offline use.
+- **Audio Playback:** The generated audio is played automatically.
 - **Customizable Voice Selection:** Users can choose from a list of available voices, including gender and regional dialect options.
 - **Retry Logic:** If an error occurs when processing a chunk, the program automatically retries up to three times.
 
@@ -18,25 +18,30 @@ This repository provides a Python program that uses the Speechma API to convert 
 
 - Python 3.x
 - `requests` library
+- `pydub` library
+- `numpy` library
+- `sounddevice` library
 
 ### Steps to Install
 
 1. Clone this repository to your local machine:
 
    ```bash
-   git clone https://github.com/fairy-root/Speechma-API.git
-   cd Speechma-API
+   git clone https://github.com/WillsonPat/speechma-tts-simple-cli.git
+   cd speechma-tts-simple-cli
    ```
 
-2. Install the required dependencies:
+1. Install the required dependencies:
 
    ```bash
-   pip install requests
+   pip install requests numpy pydub sounddevice
    ```
 
-3. Ensure that the `voices.json` file is present in the root directory. If it's missing or corrupted, you will see an error.
+1. Ensure that ffmpeg's binaries are available on the command line.
 
-4. Run the script:
+1. Ensure that the `voices.json` file is present in the root directory. If it's missing or corrupted, you will see an error.
+
+1. Run the script:
 
    ```bash
    python main.py
@@ -44,24 +49,10 @@ This repository provides a Python program that uses the Speechma API to convert 
 
 ## Usage
 
-- The program will prompt you to enter the text you wish to convert to speech. You can input multiline text by pressing Enter after each line. To finish, type `END` and press Enter.
+- The program will prompt you to enter the text you wish to convert to speech. You can input multiline text by pressing Enter after each line. To finish, type an empty line and press Enter.
 - You will then be asked to choose the voice you want to use from the available options.
 - The program will process the input text, split it into chunks if needed, and send the chunks to the Speechma API for conversion into speech.
-- The resulting audio will be saved in MP3 format in the current directory with filenames like `audio_1.mp3`, `audio_2.mp3`, etc.
-
-### Example
-
-```bash
-Enter your text (press Enter on an empty line to finish):
-This is an example text.
-END
-Available voices:
-1- English UK female Sonia
-2- English UK female Maisie
-Enter the number of the voice you want to use (1-2):
-```
-
-The audio will be saved as `audio_1.mp3`, `audio_2.mp3`, etc.
+- The resulting audio will, by default, be played directly without hitting the disk.
 
 ## Files
 
@@ -81,27 +72,14 @@ The audio will be saved as `audio_1.mp3`, `audio_2.mp3`, etc.
   }
   ```
 
-## Donation
+## Thanks
 
-Your support is appreciated:
-
-- USDt (TRC20): `TGCVbSSJbwL5nyXqMuKY839LJ5q5ygn2uS`
-- BTC: `13GS1ixn2uQAmFQkte6qA5p1MQtMXre6MT`
-- ETH (ERC20): `0xdbc7a7dafbb333773a5866ccf7a74da15ee654cc`
-- LTC: `Ldb6SDxUMEdYQQfRhSA3zi4dCUtfUdsPou`
-
-## Author
-
-- GitHub: [FairyRoot](https://github.com/fairy-root)
-- Telegram: [@FairyRoot](https://t.me/FairyRoot)
+Thanks to:
+* the original author for their initial project: [FairyRoot](https://github.com/fairy-root)
 
 ## Contributing
 
 If you would like to contribute to this project, feel free to fork the repository and submit pull requests. Ensure that your code follows the existing structure, and test it thoroughly.
-
-### TODO
-
-- [ ] Add more voices to the `voices.json` file for additional languages, dialects, and genders.
 
 ## License
 
