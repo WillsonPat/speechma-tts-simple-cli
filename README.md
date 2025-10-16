@@ -75,7 +75,8 @@ This repository provides a Python program that uses the Speechma API to convert 
 ## Thanks
 
 Thanks to:
-* the original author for their initial project: [FairyRoot](https://github.com/fairy-root)
+* [FairyRoot](https://github.com/fairy-root): original author for their initial project 
+* [Owen Eldridge](https://github.com/oweneldridge) for improvements to original project (via [speechma-tts-cli](https://github.com/oweneldridge/))
 
 ## Contributing
 
