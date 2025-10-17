@@ -1,16 +1,15 @@
-import requests as req
-from pydub import AudioSegment
+from typing import Dict
 import numpy as np
 import sounddevice as sd
+import requests as req
+from pydub import AudioSegment
 import json
 import sys
 import io
 import threading
 import queue
-from typing import Dict
 import argparse
 import os
-
 
 # Function to print colored text
 def print_colored(text: str, color: str) -> None:
@@ -379,9 +378,10 @@ class TtsProducer:
                 mp3_data = get_mp3_data(text)
                 if mp3_data is not None:
                     self.nextConsumer.put(mp3_data)
-                self.text_queue.task_done()
             except Exception as e:
                 print_colored(f"Exception while processing TTS data: {e}", "red")
+            finally:
+                self.text_queue.task_done()
 
     def put(self, text_data):
         """Add text data to the queue for playback."""
@@ -426,9 +426,10 @@ class AudioPlayer:
                 if mp3_byte_data is None:  # Exit signal
                     break
                 play_audio(mp3_byte_data)
-                self.audio_queue.task_done()
             except Exception as e:
                 print_colored(f"Exception while processing mp3 data: {e}", "red")
+            finally:
+                self.audio_queue.task_done()
 
     def put(self, mp3_byte_data):
         """Add audio data to the queue for playback."""
