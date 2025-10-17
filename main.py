@@ -8,6 +8,7 @@ import io
 import threading
 import queue
 from typing import Dict
+import argparse
 
 
 # Function to print colored text
@@ -453,6 +454,34 @@ class VoiceManager:
         except json.JSONDecodeError:
             print_colored(f"Error: {self.voices_path} is not a valid JSON file.", "red")
         return False
+
+    def is_valid_voice(self, voice_id: str) -> bool:
+        """
+        Validate whether a given voice_id exists in the loaded voices.
+
+        Returns True if voice_id was found among the leaf voice IDs, False otherwise.
+        """
+        if not voice_id or not self.voices:
+            return False
+        # get_all_voice_ids yields all leaf voice ids from the nested structure
+        return any(voice_id == vid for vid in get_all_voice_ids(self.voices))
+    
+    def get_voice_description_for_id(self, voice_id: str) -> str | None:
+        """Get the voice language, country, name, and gender for a given voice ID"""
+
+        def find_name_recursive(data):
+            for key, value in data.items():
+                if isinstance(value, dict):
+                    result = find_name_recursive(value)
+                    if result:
+                        # Prepend the current key to the deeper result to build a hierarchical description
+                        return f"{result}, {key}"
+                else:
+                    if value == voice_id:
+                        return key
+            return None
+
+        return find_name_recursive(self.voices)
     
     def count_voice_stats(self):
         """Function to count voices in the hierarchical structure"""
@@ -483,31 +512,66 @@ class VoiceManager:
         # Display statistics
         stats = self.count_voice_stats()
         print_colored("=" * 60, "cyan")
-        print_colored("🎤 Speechma Text-to-Speech", "magenta")
+        print_colored("Speechma Text-to-Speech", "magenta")
         print_colored("=" * 60, "cyan")
-        print_colored(f"📊 Voice Library: {stats['total']} voices", "yellow")
+        print_colored(f"Voice Library: {stats['total']} voices", "yellow")
         print(f"   • {len(stats['languages'])} languages")
         print(f"   • {len(stats['countries'])} countries")
         print_colored("=" * 60, "cyan")
 
 # Main function
 def main():
+    parser = argparse.ArgumentParser(description="speechma TTS simple CLI")
+    parser.add_argument("--voice", "-v", help="Voice ID to use (e.g. voice-XXX). If omitted, interactive selection is used.")
+    parser.add_argument("--text", "-t", help="Text to speak (single utterance).")
+    parser.add_argument("--file", "-f", help="Read text from file and send as single utterance.")
+    parser.add_argument("--voices", help="Path to voices.json (default: voices.json)", default="voices.json")
+    args = parser.parse_args()
+
     voiceManager = VoiceManager()
+    voiceManager.voices_path = args.voices
     if not voiceManager.load_voices():
         print_colored("Error: No voices available. Exiting.", "red")
         return
 
     voiceManager.display_stats()
 
-    # Use interactive voice selection
-    voice_id, _ = select_voice_interactive(voiceManager.voices)
-    if not voice_id:
-        print_colored("Voice selection cancelled. Exiting.", "yellow")
-        return
+    # Determine voice id (use CLI or interactive)
+    if args.voice:
+        voice_id = args.voice
+        voice_name = voiceManager.get_voice_description_for_id(voice_id)
+        if voice_name:
+            print_colored(f"Using voice ID from command line: {voice_name} ({voice_id})", "green")
+        else:
+            print_colored(f"Error: Invalid voice ID '{voice_id}' provided. Exiting.", "red")
+            return
+    else:
+        voice_id, _ = select_voice_interactive(voiceManager.voices)
+        if not voice_id:
+            print_colored("Voice selection cancelled. Exiting.", "yellow")
+            return
 
     audioPlayer = AudioPlayer()
     ttsProducer = TtsProducer(voice_id, audioPlayer)
 
+    # Non-interactive modes
+    if args.text or args.file:
+        if args.file:
+            try:
+                with open(args.file, "r", encoding="utf-8") as fh:
+                    content = fh.read()
+            except Exception as e:
+                print_colored(f"Failed to read file {args.file}: {e}", "red")
+                return
+            ttsProducer.put(content)
+        else:
+            ttsProducer.put(args.text)
+
+        # wait for processing and exit
+        ttsProducer.wait_for_completion()
+        return
+
+    # Interactive input mode (fallback)
     print("\nInteractive input mode:")
     print("  1. Type sentences to speak out loud.")
     print("  2. Each line is processed separately.")
@@ -516,11 +580,9 @@ def main():
     try:
         while True:
             text = input()
-            
             if not text:
                 print_colored("End of text stream. Exiting gracefully.", "yellow")
                 return
-
             ttsProducer.put(text)
     finally:
         print_colored("Waiting for producers to finish. Press Ctrl + C to abort.", "yellow")
