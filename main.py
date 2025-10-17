@@ -660,3 +660,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print_colored("\nExiting gracefully...", "yellow")
         sys.exit(0)
+    except EOFError:
+        print_colored("\nEnd of input detected. Exiting gracefully...", "yellow")
+        sys.exit(0)
