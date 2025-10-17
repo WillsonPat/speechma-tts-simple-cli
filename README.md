@@ -22,7 +22,7 @@ This repository provides a Python program that uses the Speechma API to convert 
 - `numpy` library
 - `sounddevice` library
 
-### Steps to Install
+### Steps to get started
 
 1. Clone this repository to your local machine:
 
@@ -46,6 +46,22 @@ This repository provides a Python program that uses the Speechma API to convert 
    ```bash
    python main.py
    ```
+
+## Builing for release
+
+### Prerequisites
+
+- Prerequistes for running the script
+- `pyinstaller` library
+
+## Building
+
+To build a release exectuable call:
+```
+pyinstaller --onefile main.py
+```
+
+`build.bat` is provided as shorthand
 
 ## Usage
 
