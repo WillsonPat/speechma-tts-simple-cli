@@ -345,7 +345,18 @@ class TtsProducer:
             """Function to validate text"""
             return ''.join(char for char in text if ord(char) < 128)
         
-        def get_mp3_data(text_data):
+        def attempt_get_audio(data, chunk_id: int, max_retries: int = 3):
+            """Attempts to get audio data with retries"""
+            for retry in range(max_retries):
+                response = get_audio(self.url, data)
+                if response:
+                    return response
+
+                print_colored(f"Retry {retry + 1} for chunk {chunk_id}...", "yellow")
+            else:
+                print_colored(f"Failed to process chunk {chunk_id} after {max_retries} retries.", "red")
+
+        def get_mp3_data_chunks(text_data):
             """Obtains mp3 data from Speechma"""
             text = validate_text(text_data)     
             chunks = split_text(text, chunk_size=1000)
@@ -360,23 +371,14 @@ class TtsProducer:
                     "voice": self.voice_id
                 }
 
-                max_retries = 3
-                for retry in range(max_retries):
-                    response = get_audio(self.url, data)
-                    if response:
-                        return response
-                    
-                    print_colored(f"Retry {retry + 1} for chunk {i}...", "yellow")
-                else:
-                    print_colored(f"Failed to process chunk {i} after {max_retries} retries.", "red")
+                yield attempt_get_audio(data, i, max_retries = 3)
 
         while True:
             try:
                 text = self.text_queue.get()
                 if text is None:  # Exit signal
                     break
-                mp3_data = get_mp3_data(text)
-                if mp3_data is not None:
+                for mp3_data in get_mp3_data_chunks(text):
                     self.nextConsumer.put(mp3_data)
             except Exception as e:
                 print_colored(f"Exception while processing TTS data: {e}", "red")
