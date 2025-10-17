@@ -55,47 +55,210 @@ def input_colored(prompt: str, color: str) -> str:
     colored_prompt: str = f"{color_code}{prompt}\033[0m"
     return input(colored_prompt)
 
-def load_voices() -> Dict | None:
-    """Load voices from the JSON file"""
-    try:
-        with open('voices.json', 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print_colored("Error: voices.json file not found.", "red")
-        return {}
-    except json.JSONDecodeError:
-        print_colored("Error: voices.json is not a valid JSON file.", "red")
-        return {}
-
-def display_voices(voices: map | None, prefix: str = "") -> int:
-    """Recursively display voices in an enumerated format"""
-    if not voices:
-        print_colored("Error: No voices available.", "red")
-        return 0
-
-    index = 0
-    for key, value in voices.items():
+def get_all_voice_ids(data):
+    """Recursively get all voice IDs from nested structure"""
+    for key, value in data.items():
         if isinstance(value, dict):
-            new_prefix = f"{prefix}{key} " if prefix else f"{key} "
-            count = display_voices(value, new_prefix)
-            index += count
+            yield from get_all_voice_ids(value)
         else:
-            index += 1
-            print(f"{index}- {prefix}{key}")
-    return index
+            yield value
 
-def get_voice_id(voices, choice: int, current_index:int = 0):
-    """Recursively get the selected voice ID based on user input"""
-    for key, value in voices.items():
-        if isinstance(value, dict):
-            result, current_index = get_voice_id(value, choice, current_index)
-            if result:
-                return result, current_index
-        else:
-            current_index += 1
-            if current_index == choice:
-                return value, current_index
-    return None, current_index
+def count_voices_by_level(voices, level=0):
+    """Count voices at different hierarchy levels"""
+    counts = {}
+
+    def count_recursive(data, current_level=0):
+        for key, value in data.items():
+            if isinstance(value, dict):
+                if current_level == level:
+                    # Count voices under this key
+                    voice_count = sum(1 for _ in get_all_voice_ids(value))
+                    counts[key] = voice_count
+                count_recursive(value, current_level + 1)
+
+    count_recursive(voices)
+    return counts
+
+def select_voice_interactive(voices):
+    """
+    Interactive voice selection with hierarchical filtering.
+    Returns: (voice_id, voice_name) tuple or (None, None) if cancelled
+
+    Hierarchy: Language → Country → Gender → Voice Name
+    Special commands: 'b' (back), 'r' (restart), 'voice-XXX' (direct ID)
+    """
+
+    while True:
+        # Step 1: Select Language
+        print_colored("\n" + "="*60, "blue")
+        print_colored("STEP 1: Select Language", "blue")
+        print_colored("="*60, "blue")
+
+        lang_counts = count_voices_by_level(voices, level=0)
+        languages = sorted(lang_counts.keys())
+
+        for i, lang in enumerate(languages, 1):
+            count = lang_counts[lang]
+            print(f"{i}. {lang} ({count} voices)")
+
+        print_colored("\nType 'voice-XXX' to directly enter a voice ID, or 'q' to quit", "yellow")
+
+        lang_input = input_colored(f"\nSelect language (1-{len(languages)}): ", "green").strip()
+
+        # Handle special inputs
+        if lang_input.lower() == 'q':
+            return None, None
+        if lang_input.startswith('voice-'):
+            return lang_input, f"Direct ID: {lang_input}"
+
+        try:
+            lang_choice = int(lang_input)
+            if lang_choice < 1 or lang_choice > len(languages):
+                print_colored("Invalid choice. Please try again.", "red")
+                continue
+        except ValueError:
+            print_colored("Invalid input. Please enter a number.", "red")
+            continue
+
+        selected_language = languages[lang_choice - 1]
+
+        # Step 2: Select Country
+        while True:
+            print_colored("\n" + "="*60, "blue")
+            print_colored(f"STEP 2: Select Country ({selected_language})", "blue")
+            print_colored("="*60, "blue")
+
+            country_data = voices[selected_language]
+            country_counts = count_voices_by_level({selected_language: country_data}, level=1)
+            countries = sorted(country_counts.keys())
+
+            for i, country in enumerate(countries, 1):
+                count = country_counts[country]
+                print(f"{i}. {country} ({count} voices)")
+
+            print_colored("\nType 'b' to go back, 'r' to restart, or 'q' to quit", "yellow")
+
+            country_input = input_colored(f"\nSelect country (1-{len(countries)}): ", "green").strip()
+
+            if country_input.lower() == 'b':
+                break  # Go back to language selection
+            if country_input.lower() == 'r':
+                return select_voice_interactive(voices)  # Restart
+            if country_input.lower() == 'q':
+                return None, None
+
+            try:
+                country_choice = int(country_input)
+                if country_choice < 1 or country_choice > len(countries):
+                    print_colored("Invalid choice. Please try again.", "red")
+                    continue
+            except ValueError:
+                print_colored("Invalid input. Please enter a number.", "red")
+                continue
+
+            selected_country = countries[country_choice - 1]
+
+            # Step 3: Select Gender
+            while True:
+                print_colored("\n" + "="*60, "blue")
+                print_colored(f"STEP 3: Select Gender ({selected_language} - {selected_country})", "blue")
+                print_colored("="*60, "blue")
+
+                gender_data = country_data[selected_country]
+                genders = sorted(gender_data.keys())
+
+                for i, gender in enumerate(genders, 1):
+                    count = len(gender_data[gender])
+                    print(f"{i}. {gender.capitalize()} ({count} voices)")
+
+                print_colored("\nType 'b' to go back, 'r' to restart, or 'q' to quit", "yellow")
+
+                gender_input = input_colored(f"\nSelect gender (1-{len(genders)}): ", "green").strip()
+
+                if gender_input.lower() == 'b':
+                    break  # Go back to country selection
+                if gender_input.lower() == 'r':
+                    return select_voice_interactive(voices)  # Restart
+                if gender_input.lower() == 'q':
+                    return None, None
+
+                try:
+                    gender_choice = int(gender_input)
+                    if gender_choice < 1 or gender_choice > len(genders):
+                        print_colored("Invalid choice. Please try again.", "red")
+                        continue
+                except ValueError:
+                    print_colored("Invalid input. Please enter a number.", "red")
+                    continue
+
+                selected_gender = genders[gender_choice - 1]
+
+                # Step 4: Select Voice Name
+                while True:
+                    print_colored("\n" + "="*60, "blue")
+                    print_colored(f"STEP 4: Select Voice", "blue")
+                    print_colored(f"{selected_language} - {selected_country} - {selected_gender.capitalize()}", "cyan")
+                    print_colored("="*60, "blue")
+
+                    voice_names = gender_data[selected_gender]
+                    sorted_names = sorted(voice_names.keys())
+
+                    # Ask if user wants to see voice IDs
+                    show_ids_input = input_colored("\nShow voice IDs? (y/n, default: n): ", "blue").lower().strip()
+
+                    # Handle navigation commands at the ID prompt
+                    if show_ids_input == 'b':
+                        break  # Go back to gender selection
+                    if show_ids_input == 'r':
+                        return select_voice_interactive(voices)  # Restart
+                    if show_ids_input == 'q':
+                        return None, None
+
+                    show_ids = show_ids_input == 'y'
+
+                    print()
+                    for i, name in enumerate(sorted_names, 1):
+                        voice_id = voice_names[name]
+                        if show_ids:
+                            print(f"{i}. {name} \033[90m({voice_id})\033[0m")
+                        else:
+                            print(f"{i}. {name}")
+
+                    print_colored("\nType 'b' to go back, 'r' to restart, or 'q' to quit", "yellow")
+
+                    voice_input = input_colored(f"\nSelect voice (1-{len(sorted_names)}): ", "green").strip()
+
+                    if voice_input.lower() == 'b':
+                        break  # Go back to gender selection
+                    if voice_input.lower() == 'r':
+                        return select_voice_interactive(voices)  # Restart
+                    if voice_input.lower() == 'q':
+                        return None, None
+
+                    try:
+                        voice_choice = int(voice_input)
+                        if voice_choice < 1 or voice_choice > len(sorted_names):
+                            print_colored("Invalid choice. Please try again.", "red")
+                            continue
+                    except ValueError:
+                        print_colored("Invalid input. Please enter a number.", "red")
+                        continue
+
+                    selected_name = sorted_names[voice_choice - 1]
+                    selected_voice_id = voice_names[selected_name]
+
+                    # Show final selection
+                    print_colored("\n" + "="*60, "green")
+                    print_colored("✓ Voice Selected!", "green")
+                    print_colored("="*60, "green")
+                    print(f"Language: {selected_language}")
+                    print(f"Country: {selected_country}")
+                    print(f"Gender: {selected_gender.capitalize()}")
+                    print(f"Voice: {selected_name}")
+                    print(f"Voice ID: {selected_voice_id}")
+                    print_colored("="*60, "green")
+
+                    return selected_voice_id, selected_name
 
 class TtsProducer:
     """Text to speech producer that obtains mp3 in a separate thread and passes them to a consumer"""
@@ -270,28 +433,76 @@ class AudioPlayer:
         self.audio_queue.put(None)  # Signal the consumer to exit
         self.consumer_thread.join()  # Wait for consumer thread to finish
 
+class VoiceManager:
+    """Manager for audio voices that can be used with speechma"""
+    def __init__(self):
+        self.voices = {}
+        self.voices_path = "voices.json"
+
+    def load_voices(self) -> bool:
+        """Load voices from the JSON file"""
+        try:
+            with open(self.voices_path, 'r') as f:
+                voices = json.load(f)
+                if not voices:
+                    return False
+                self.voices = voices
+                return True
+        except FileNotFoundError:
+            print_colored(f"Error: {self.voices_path} file not found.", "red")
+        except json.JSONDecodeError:
+            print_colored(f"Error: {self.voices_path} is not a valid JSON file.", "red")
+        return False
+    
+    def count_voice_stats(self):
+        """Function to count voices in the hierarchical structure"""
+        stats = {
+            'total': 0,
+            'languages': set(),
+            'countries': set(),
+            'genders': set()
+        }
+
+        def count_recursive(data, level=0):
+            for key, value in data.items():
+                if isinstance(value, dict):
+                    if level == 0:  # Language level
+                        stats['languages'].add(key)
+                    elif level == 1:  # Country level
+                        stats['countries'].add(key)
+                    elif level == 2:  # Gender level
+                        stats['genders'].add(key)
+                    count_recursive(value, level + 1)
+                else:
+                    stats['total'] += 1
+
+        count_recursive(self.voices)
+        return stats
+    
+    def display_stats(self):
+        # Display statistics
+        stats = self.count_voice_stats()
+        print_colored("=" * 60, "cyan")
+        print_colored("🎤 Speechma Text-to-Speech", "magenta")
+        print_colored("=" * 60, "cyan")
+        print_colored(f"📊 Voice Library: {stats['total']} voices", "yellow")
+        print(f"   • {len(stats['languages'])} languages")
+        print(f"   • {len(stats['countries'])} countries")
+        print_colored("=" * 60, "cyan")
+
 # Main function
 def main():
-    voices = load_voices()
-    if not voices:
+    voiceManager = VoiceManager()
+    if not voiceManager.load_voices():
         print_colored("Error: No voices available. Exiting.", "red")
         return
 
-    print_colored("Available voices:", "blue")
-    total_voices = display_voices(voices)
+    voiceManager.display_stats()
 
-    try:
-        choice = int(input_colored(f"Enter the number of the voice you want to use (1-{total_voices}): ", "green"))
-        if choice < 1 or choice > total_voices:
-            print_colored("Error: Invalid choice. Please enter a valid number.", "red")
-            return
-    except ValueError:
-        print_colored("Error: Invalid input. Please enter a number.", "red")
-        return
-
-    voice_id, _ = get_voice_id(voices, choice)
+    # Use interactive voice selection
+    voice_id, _ = select_voice_interactive(voiceManager.voices)
     if not voice_id:
-        print_colored("Error: Invalid voice choice. Exiting.", "red")
+        print_colored("Voice selection cancelled. Exiting.", "yellow")
         return
 
     audioPlayer = AudioPlayer()
