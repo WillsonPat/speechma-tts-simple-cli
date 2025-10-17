@@ -57,6 +57,11 @@ def input_colored(prompt: str, color: str) -> str:
     colored_prompt: str = f"{color_code}{prompt}\033[0m"
     return input(colored_prompt)
 
+def display_header():
+    print_colored("=" * 60, "cyan")
+    print_colored("Speechma Text-to-Speech Simple Client", "magenta")
+    print_colored("=" * 60, "cyan")
+
 def get_all_voice_ids(data):
     """Recursively get all voice IDs from nested structure"""
     for key, value in data.items():
@@ -512,9 +517,6 @@ class VoiceManager:
     def display_stats(self):
         # Display statistics
         stats = self.count_voice_stats()
-        print_colored("=" * 60, "cyan")
-        print_colored("Speechma Text-to-Speech", "magenta")
-        print_colored("=" * 60, "cyan")
         print_colored(f"Voice Library: {stats['total']} voices", "yellow")
         print(f"   • {len(stats['languages'])} languages")
         print(f"   • {len(stats['countries'])} countries")
@@ -530,7 +532,7 @@ class Settings:
             Returns:
                 parsed arguments.
             """
-            parser = argparse.ArgumentParser(description="speechma TTS simple CLI")
+            parser = argparse.ArgumentParser(description="Speechma Text-to-Speech Simple Client")
             parser.add_argument("--settings", "-s", help="Path to JSON settings file (default: settings.json)", default="settings.json")
             parser.add_argument("--voice", "-v", help="Voice ID to use (e.g. voice-XXX). If omitted, interactive selection is used.")
             parser.add_argument("--text", "-t", help="Text to speak (single utterance).")
@@ -572,20 +574,31 @@ class Settings:
         self.text = args.text if args.text is not None else settingsFile.get("text")
         self.file = args.file if args.file is not None else settingsFile.get("file")
         self.voices_path = args.voices if args.voices is not None else settingsFile.get("voices", "voices.json")
-        self.interactive = not (self.text or self.file)
+        self.display_stats = not (self.text or self.file)
+
+    def display_settings(self):
+        print_colored("Current Settings:", "cyan")
+        print(f"  Voice ID: {self.voice_id if self.voice_id else 'None (interactive selection)'}")
+        print(f"  Text: {'Provided' if self.text else 'None'}")
+        print(f"  File: {self.file if self.file else 'None'}")
+        print(f"  Voices Path: {self.voices_path}")
+        print_colored("=" * 60, "cyan")
 
 # Main function
 def main():
+    display_header()
+
     settings = Settings()
     settings.load()
-
+    settings.display_settings()
+    
     voiceManager = VoiceManager()
     voiceManager.voices_path = settings.voices_path
     if not voiceManager.load_voices():
         print_colored("Error: No voices available. Exiting.", "red")
         return
 
-    if settings.interactive:
+    if settings.display_stats:
         voiceManager.display_stats()
 
     # Determine voice id (use CLI or interactive)
