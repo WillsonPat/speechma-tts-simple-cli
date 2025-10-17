@@ -9,6 +9,7 @@ import threading
 import queue
 from typing import Dict
 import argparse
+import os
 
 
 # Function to print colored text
@@ -519,26 +520,77 @@ class VoiceManager:
         print(f"   • {len(stats['countries'])} countries")
         print_colored("=" * 60, "cyan")
 
+class Settings:
+    """Manager for application settings loaded from a JSON file and/or command line arguments"""
+
+    def load(self) -> Dict:
+        def parse_args() -> argparse.Namespace:
+            """
+            Parse command line arguments.
+            Returns:
+                parsed arguments.
+            """
+            parser = argparse.ArgumentParser(description="speechma TTS simple CLI")
+            parser.add_argument("--settings", "-s", help="Path to JSON settings file (default: settings.json)", default="settings.json")
+            parser.add_argument("--voice", "-v", help="Voice ID to use (e.g. voice-XXX). If omitted, interactive selection is used.")
+            parser.add_argument("--text", "-t", help="Text to speak (single utterance).")
+            parser.add_argument("--file", "-f", help="Read text from file and send as single utterance.")
+            parser.add_argument("--voices", help="Path to voices.json (default: voices.json)")
+            args = parser.parse_args()
+            return args
+
+        def load_settings_from_file(path: str = "settings.json") -> Dict:
+            """
+            Load settings from a JSON file. Returns a dict (empty if not found/invalid).
+            Args:
+                path: Path to the settings file.
+            Returns:
+                Dictionary with settings.
+            """
+            if not path:
+                return {}
+            try:
+                if os.path.exists(path):
+                    with open(path, "r", encoding="utf-8") as sh:
+                        loaded = json.load(sh)
+                    if isinstance(loaded, dict):
+                        print_colored(f"Loaded settings from {path}", "cyan")
+                        return loaded
+                    print_colored(f"Settings file {path} does not contain a JSON object; ignoring.", "yellow")
+                return {}
+            except json.JSONDecodeError as e:
+                print_colored(f"Settings file {path} is not valid JSON: {e}", "red")
+            except Exception as e:
+                print_colored(f"Failed to read settings file {path}: {e}", "red")
+            return {}
+        
+        args = parse_args()
+        settingsFile = load_settings_from_file(args.settings)
+        
+        # Load settings (CLI takes precedence over settings values)
+        self.voice_id = args.voice if args.voice is not None else settingsFile.get("voice")
+        self.text = args.text if args.text is not None else settingsFile.get("text")
+        self.file = args.file if args.file is not None else settingsFile.get("file")
+        self.voices_path = args.voices if args.voices is not None else settingsFile.get("voices", "voices.json")
+        self.interactive = not (self.text or self.file)
+
 # Main function
 def main():
-    parser = argparse.ArgumentParser(description="speechma TTS simple CLI")
-    parser.add_argument("--voice", "-v", help="Voice ID to use (e.g. voice-XXX). If omitted, interactive selection is used.")
-    parser.add_argument("--text", "-t", help="Text to speak (single utterance).")
-    parser.add_argument("--file", "-f", help="Read text from file and send as single utterance.")
-    parser.add_argument("--voices", help="Path to voices.json (default: voices.json)", default="voices.json")
-    args = parser.parse_args()
+    settings = Settings()
+    settings.load()
 
     voiceManager = VoiceManager()
-    voiceManager.voices_path = args.voices
+    voiceManager.voices_path = settings.voices_path
     if not voiceManager.load_voices():
         print_colored("Error: No voices available. Exiting.", "red")
         return
 
-    voiceManager.display_stats()
+    if settings.interactive:
+        voiceManager.display_stats()
 
     # Determine voice id (use CLI or interactive)
-    if args.voice:
-        voice_id = args.voice
+    voice_id = settings.voice_id
+    if voice_id:
         voice_name = voiceManager.get_voice_description_for_id(voice_id)
         if voice_name:
             print_colored(f"Using voice ID from command line: {voice_name} ({voice_id})", "green")
@@ -554,30 +606,27 @@ def main():
     audioPlayer = AudioPlayer()
     ttsProducer = TtsProducer(voice_id, audioPlayer)
 
-    # Non-interactive modes
-    if args.text or args.file:
-        if args.file:
+    try:
+        if settings.text:
+            ttsProducer.put(settings.text)
+            return
+        
+        if settings.file:
             try:
-                with open(args.file, "r", encoding="utf-8") as fh:
+                with open(settings.file, "r", encoding="utf-8") as fh:
                     content = fh.read()
             except Exception as e:
-                print_colored(f"Failed to read file {args.file}: {e}", "red")
+                print_colored(f"Failed to read file {settings.file}: {e}", "red")
                 return
             ttsProducer.put(content)
-        else:
-            ttsProducer.put(args.text)
+            return
 
-        # wait for processing and exit
-        ttsProducer.wait_for_completion()
-        return
-
-    # Interactive input mode (fallback)
-    print("\nInteractive input mode:")
-    print("  1. Type sentences to speak out loud.")
-    print("  2. Each line is processed separately.")
-    print("  3. An empty line exits the program.")
-    print_colored("\nWaiting for user input...", "green")
-    try:
+        # Interactive input mode (fallback)
+        print("\nInteractive input mode:")
+        print("  1. Type sentences to speak out loud.")
+        print("  2. Each line is processed separately.")
+        print("  3. An empty line exits the program.")
+        print_colored("\nWaiting for user input...", "green")
         while True:
             text = input()
             if not text:
