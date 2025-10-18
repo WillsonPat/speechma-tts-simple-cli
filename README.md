@@ -21,6 +21,7 @@ This repository provides a Python program that uses the Speechma API to convert 
 - `pydub` library
 - `numpy` library
 - `sounddevice` library
+- `watchdog` library
 
 ### Steps to get started
 
@@ -34,7 +35,7 @@ This repository provides a Python program that uses the Speechma API to convert 
 1. Install the required dependencies:
 
    ```bash
-   pip install requests numpy pydub sounddevice
+   pip install requests numpy pydub sounddevice watchdog
    ```
 
 1. Ensure that ffmpeg's binaries are available on the command line.
@@ -43,9 +44,9 @@ This repository provides a Python program that uses the Speechma API to convert 
 
 1. Run the script:
 
-   ```bash
-   python main.py
-   ```
+  ```bash
+  python main.py
+  ```
 
 ## Builing for release
 
@@ -57,7 +58,7 @@ This repository provides a Python program that uses the Speechma API to convert 
 ## Building
 
 To build a release exectuable call:
-```
+```bash
 pyinstaller --onefile main.py
 ```
 

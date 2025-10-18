@@ -3,6 +3,7 @@ import numpy as np
 import sounddevice as sd
 import requests as req
 from pydub import AudioSegment
+from enum import Enum
 import json
 import sys
 import io
@@ -525,10 +526,29 @@ class VoiceManager:
         print(f"   • {len(stats['countries'])} countries")
         print_colored("=" * 60, "cyan")
 
+class FileMonitorOption(Enum):
+    ONCE = "once"
+    UPDATES = "updates"
+    DEFAULT = ONCE
+
 class Settings:
     """Manager for application settings loaded from a JSON file and/or command line arguments"""
 
     def load(self) -> Dict:
+        def convertToFileMonitorOption(file_monitor_string):
+            """
+            Convert string to FileMonitorOption enum, with default fallback.
+            Args:
+                file_monitor_string: String representation of the file monitor option.
+            Returns:
+                FileMonitorOption enum value.
+            """
+            try:
+                return FileMonitorOption(file_monitor_string)
+            except ValueError:
+                print_colored(f"Invalid value for --fileMonitor: {file_monitor_string}. Using default value '{FileMonitorOption.DEFAULT.value}'.", "yellow")
+                return FileMonitorOption.DEFAULT
+
         def parse_args() -> argparse.Namespace:
             """
             Parse command line arguments.
@@ -541,6 +561,9 @@ class Settings:
             parser.add_argument("--text", "-t", help="Text to speak (single utterance).")
             parser.add_argument("--file", "-f", help="Read text from file and send as single utterance.")
             parser.add_argument("--voices", help="Path to voices.json (default: voices.json)")
+            parser.add_argument('--fileMonitor',
+                                choices=[option.value for option in FileMonitorOption],
+                                help="Specify 'once' to read the file once, or 'updates' to monitor for updates.")
             args = parser.parse_args()
             return args
 
@@ -570,22 +593,90 @@ class Settings:
             return {}
         
         args = parse_args()
-        settingsFile = load_settings_from_file(args.settings)
+        settings_file = load_settings_from_file(args.settings)
         
         # Load settings (CLI takes precedence over settings values)
-        self.voice_id = args.voice if args.voice is not None else settingsFile.get("voice")
-        self.text = args.text if args.text is not None else settingsFile.get("text")
-        self.file = args.file if args.file is not None else settingsFile.get("file")
-        self.voices_path = args.voices if args.voices is not None else settingsFile.get("voices", "voices.json")
+        self.voice_id = args.voice if args.voice is not None else settings_file.get("voice")
+        self.text = args.text if args.text is not None else settings_file.get("text")
+        self.file = args.file if args.file is not None else settings_file.get("file")
+        self.voices_path = args.voices if args.voices is not None else settings_file.get("voices", "voices.json")
+        file_monitor_string = args.fileMonitor if args.fileMonitor is not None else settings_file.get("fileMonitor", FileMonitorOption.DEFAULT.value)
+        self.file_monitor = convertToFileMonitorOption(file_monitor_string)
         self.display_stats = not (self.text or self.file)
 
     def display_settings(self):
+        """
+        Display current settings.
+        """
         print_colored("Current Settings:", "cyan")
         print(f"  Voice ID: {self.voice_id if self.voice_id else 'None (interactive selection)'}")
         print(f"  Text: {'Provided' if self.text else 'None'}")
-        print(f"  File: {self.file if self.file else 'None'}")
-        print(f"  Voices Path: {self.voices_path}")
+        print(f"  File: '{self.file if self.file else 'None'}'")
+        print(f"  File Monitor: {self.file_monitor.value}")
+        print(f"  Voices Path: '{self.voices_path}'")
         print_colored("=" * 60, "cyan")
+
+def get_file_content(file_path: str) -> str | None:
+    """
+    Read and return the content of a file.
+    Args:
+        file_path: Path to the file.
+    Returns:
+        Content of the file as a string.
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as fh:
+            return fh.read()
+    except Exception as e:
+        print_colored(f"Failed to read file {file_path}: {e}", "red")
+        return
+
+def process_file_oneshot(file_path: str, consumer: any) -> None:
+    print_colored(f"Processing file '{file_path}' once", "yellow")
+    content = get_file_content(file_path)
+    if content:
+        consumer.put(content)
+
+def monitor_file_for_input(file_path: str, consumer: any) -> None:
+    """
+    Monitor a file for changes and process its content when modified.
+    Args:
+        file_path: Path to the file to monitor.
+        consumer: Consumer to process the file content.
+    """
+
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    from time import sleep
+
+    class FileChangeHandler(FileSystemEventHandler):
+        old_content: str = ""
+
+        def on_modified(self, event):
+            if event.src_path == file_path:
+                content = get_file_content(file_path)
+                if content and content != self.old_content:
+                    print_colored(f"Processing change in '{file_path}'", "yellow")
+                    self.old_content = content
+                    consumer.put(content)
+
+    observer = Observer()
+    event_handler = FileChangeHandler()
+    file_path = os.path.abspath(file_path)
+    dir_path = os.path.dirname(file_path)
+    observer.schedule(event_handler, path=dir_path, recursive=False)
+
+    try:
+        print_colored(f"Monitoring '{file_path}' for changes. Press Ctrl + C to stop", "green")
+        observer.start()
+        while True:
+            sleep(1)
+    except KeyboardInterrupt:
+        print_colored("File monitoring ended by user.", "yellow")
+    finally:
+        print_colored("Waiting for file monitor to finish. Press Ctrl + C to abort.", "yellow")
+        observer.stop()
+        observer.join()
 
 # Main function
 def main():
@@ -628,13 +719,10 @@ def main():
             return
         
         if settings.file:
-            try:
-                with open(settings.file, "r", encoding="utf-8") as fh:
-                    content = fh.read()
-            except Exception as e:
-                print_colored(f"Failed to read file {settings.file}: {e}", "red")
-                return
-            ttsProducer.put(content)
+            if settings.file_monitor == FileMonitorOption.UPDATES:
+                monitor_file_for_input(settings.file, ttsProducer)
+            else:
+                process_file_oneshot(settings.file, ttsProducer)
             return
 
         # Interactive input mode (fallback)
