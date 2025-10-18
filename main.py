@@ -582,14 +582,14 @@ class Settings:
                     with open(path, "r", encoding="utf-8") as sh:
                         loaded = json.load(sh)
                     if isinstance(loaded, dict):
-                        print_colored(f"Loaded settings from {path}", "cyan")
+                        print(f"Loaded settings from '{path}'")
                         return loaded
-                    print_colored(f"Settings file {path} does not contain a JSON object; ignoring.", "yellow")
+                    print_colored(f"Settings file '{path}' does not contain a JSON object; ignoring.", "yellow")
                 return {}
             except json.JSONDecodeError as e:
-                print_colored(f"Settings file {path} is not valid JSON: {e}", "red")
+                print_colored(f"Settings file '{path}' is not valid JSON: {e}", "red")
             except Exception as e:
-                print_colored(f"Failed to read settings file {path}: {e}", "red")
+                print_colored(f"Failed to read settings file '{path}': {e}", "red")
             return {}
         
         args = parse_args()
@@ -700,7 +700,7 @@ def main():
     if voice_id:
         voice_name = voiceManager.get_voice_description_for_id(voice_id)
         if voice_name:
-            print_colored(f"Using voice ID from command line: {voice_name} ({voice_id})", "green")
+            print(f"Using voice ID from command line: {voice_name} ({voice_id})")
         else:
             print_colored(f"Error: Invalid voice ID '{voice_id}' provided. Exiting.", "red")
             return
