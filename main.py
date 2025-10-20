@@ -1,8 +1,6 @@
 from typing import Dict
-import numpy as np
-import sounddevice as sd
-import requests as req
 from enum import Enum
+import requests
 import json
 import sys
 import io
@@ -269,7 +267,7 @@ def select_voice_interactive(voices):
 class TtsProducer:
     """Text to speech producer that obtains mp3 in a separate thread and passes them to a consumer"""
     def __init__(self, voice_id, nextConsumer):
-        self.session = req.Session()
+        self.session = requests.Session()
         self.nextConsumer = nextConsumer
         self.voice_id = voice_id
         self.url = 'https://speechma.com/com.api/tts-api.php'
@@ -309,7 +307,7 @@ class TtsProducer:
                 else:
                     print_colored(f"Unexpected response format: {response.headers.get('Content-Type')}", "red")
                     return None
-            except req.exceptions.RequestException as e:
+            except requests.exceptions.RequestException as e:
                 if e.response:
                     print_colored(f"Server response: {e.response.text}", "red")
                 print_colored(f"Request failed: {e}", "red")
@@ -410,11 +408,13 @@ class AudioPlayer:
 
         def play_audio(mp3_data):
             from pydub import AudioSegment
+            from numpy import array as NumPyArray
+            import sounddevice as sd
 
             """Plays an audio encoded as mp3 data"""
             byte_io = io.BytesIO(mp3_data)
             audio = AudioSegment.from_file(byte_io, format='mp3')
-            samples = np.array(audio.get_array_of_samples())
+            samples = NumPyArray(audio.get_array_of_samples())
             
             if audio.channels == 2:
                 samples = samples.reshape((-1, 2))
