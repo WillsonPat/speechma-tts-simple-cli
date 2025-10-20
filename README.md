@@ -16,10 +16,11 @@ This repository provides a Python program to be used along side speech-to-text t
 ### Prerequisites for installation
 
 - Python 3.12 or later
-- `requests` library
-- `pydub` library
-- `pyaudio` library
-- `watchdog` library
+- packages listed in requirements.txt
+
+```bash
+pip install -r requirements.txt
+```
 
 ### Steps to get started
 
@@ -50,8 +51,9 @@ This repository provides a Python program to be used along side speech-to-text t
 
 ### Prerequisites for building
 
-Prerequistes for running the script:
+To build for release, install:
 
+- Prerequistes for running the script
 - `pyinstaller` library
 
 ## Building
