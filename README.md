@@ -1,6 +1,6 @@
-# speechma-tts-simple-cli
+# tts-helper-tool
 
-This repository provides a Python program that uses the Speechma API to convert text into speech. It allows users to select from multiple voices, dialects, and languages, and bypasses the 2000-character limit by splitting the input text into manageable chunks. The program sanitizes the text, handles punctuation for better speech flow, and plays the audio as soon as it is received. Multiple chunks are played sequentially without overlap.
+This repository provides a Python program to be used along side speech-to-text tools (STT) to extend their functionality, including by providing TTS as an addon. It currenlty uses the Speechma API to convert text into speech, allows users to select from multiple voices, dialects, and languages, and bypasses the 2000-character limit by splitting the input text into manageable chunks. The program sanitizes the text, handles punctuation for better speech flow, and plays the audio as soon as it is received. Multiple chunks are played sequentially without overlap.
 
 ## Features
 

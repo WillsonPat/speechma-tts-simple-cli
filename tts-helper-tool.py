@@ -56,7 +56,7 @@ def input_colored(prompt: str, color: str) -> str:
 
 def display_header():
     print_colored("=" * 60, "cyan")
-    print_colored("Speechma Text-to-Speech Simple Client", "magenta")
+    print_colored("TTS Helper Tool", "magenta")
     print_colored("=" * 60, "cyan")
 
 def get_all_voice_ids(data):
@@ -556,7 +556,7 @@ class Settings:
             Returns:
                 parsed arguments.
             """
-            parser = argparse.ArgumentParser(description="Speechma Text-to-Speech Simple Client")
+            parser = argparse.ArgumentParser(description="TTS Helper Tool")
             parser.add_argument("--settings", "-s", help="Path to JSON settings file (default: settings.json)", default="settings.json")
             parser.add_argument("--voice", "-v", help="Voice ID to use (e.g. voice-XXX). If omitted, interactive selection is used.")
             parser.add_argument("--text", "-t", help="Text to speak (single utterance).")
