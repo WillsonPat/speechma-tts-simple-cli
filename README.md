@@ -15,11 +15,10 @@ This repository provides a Python program to be used along side speech-to-text t
 
 ### Prerequisites for installation
 
-- Python 3.x
+- Python 3.12 or later
 - `requests` library
 - `pydub` library
-- `numpy` library
-- `sounddevice` library
+- `pyaudio` library
 - `watchdog` library
 
 ### Steps to get started

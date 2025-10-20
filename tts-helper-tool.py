@@ -405,24 +405,34 @@ class AudioPlayer:
 
     def audio_consumer(self):
         """Consume audio data from the queue and play it."""
-
+        
         def play_audio(mp3_data):
-            from pydub import AudioSegment
-            from numpy import array as NumPyArray
-            import sounddevice as sd
-
             """Plays an audio encoded as mp3 data"""
+            from pydub import AudioSegment
+            import pyaudio
+            
             byte_io = io.BytesIO(mp3_data)
             audio = AudioSegment.from_file(byte_io, format='mp3')
-            samples = NumPyArray(audio.get_array_of_samples())
-            
-            if audio.channels == 2:
-                samples = samples.reshape((-1, 2))
-            
-            # using sounddevice library instead of pydub since the latter
-            # uses simple audio which crashes on later python versions
-            sd.play(samples, samplerate=audio.frame_rate)
-            sd.wait()
+
+            # Prepare audio data for PyAudio
+            samples = audio.get_array_of_samples()
+
+            # Initialize PyAudio
+            p = pyaudio.PyAudio()
+
+            # Open stream
+            stream = p.open(format=pyaudio.paInt16,
+                            channels=audio.channels,
+                            rate=audio.frame_rate,
+                            output=True)
+
+            # Play the audio
+            stream.write(samples.tobytes())
+
+            # Wait for the stream to finish
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
 
         while True:
             try:
