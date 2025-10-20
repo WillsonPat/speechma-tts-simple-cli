@@ -1,1 +1,1 @@
-pyinstaller main.py
+pyinstaller tts-helper-tool.py
