@@ -58,7 +58,7 @@ Prerequistes for running the script:
 ## Building
 
 Building currently targets windows.
-To build a release exectuable call `build.bat` from the a python prompt on windows.
+To build a release exectuable call `build.bat` from a python prompt on windows.
 
 ## Usage
 
