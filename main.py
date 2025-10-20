@@ -547,7 +547,7 @@ class Settings:
             try:
                 return FileMonitorOption(file_monitor_string)
             except ValueError:
-                print_colored(f"Invalid value for --fileMonitor: {file_monitor_string}. Using default value '{FileMonitorOption.DEFAULT.value}'.", "yellow")
+                print_colored(f"Invalid value for file monitor: {file_monitor_string}. Using default value '{FileMonitorOption.DEFAULT.value}'.", "yellow")
                 return FileMonitorOption.DEFAULT
 
         def parse_args() -> argparse.Namespace:
