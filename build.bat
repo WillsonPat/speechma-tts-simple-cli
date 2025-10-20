@@ -1,1 +1,1 @@
-pyinstaller --onefile main.py
+pyinstaller main.py
