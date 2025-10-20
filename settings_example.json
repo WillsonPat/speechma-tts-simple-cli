@@ -1,5 +1,6 @@
 {
     "voice": "voice-111",
     "voices": "voices.json",
-    "text": "Hello, this is a test of the text to speech system."
+    "text": "Hello, this is a test of the text to speech system.",
+    "ffmpegBinPath": "/path/to/ffmpeg/bin"
 }

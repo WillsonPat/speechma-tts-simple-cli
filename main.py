@@ -2,7 +2,6 @@ from typing import Dict
 import numpy as np
 import sounddevice as sd
 import requests as req
-from pydub import AudioSegment
 from enum import Enum
 import json
 import sys
@@ -410,6 +409,8 @@ class AudioPlayer:
         """Consume audio data from the queue and play it."""
 
         def play_audio(mp3_data):
+            from pydub import AudioSegment
+
             """Plays an audio encoded as mp3 data"""
             byte_io = io.BytesIO(mp3_data)
             audio = AudioSegment.from_file(byte_io, format='mp3')
@@ -602,6 +603,7 @@ class Settings:
         self.voices_path = args.voices if args.voices is not None else settings_file.get("voices", "voices.json")
         file_monitor_string = args.fileMonitor if args.fileMonitor is not None else settings_file.get("fileMonitor", FileMonitorOption.DEFAULT.value)
         self.file_monitor = convertToFileMonitorOption(file_monitor_string)
+        self.ffmpeg_bin_path = settings_file.get("ffmpegBinPath", None)
         self.display_stats = not (self.text or self.file)
 
     def display_settings(self):
@@ -680,11 +682,23 @@ def monitor_file_for_input(file_path: str, consumer: any) -> None:
 
 # Main function
 def main():
+    def prepend_to_path(new_path: str) -> None:
+        """
+        Prepend a directory to the system PATH environment variable.
+        Args:
+            new_path: Directory path to prepend.
+        """
+        current_path = os.environ.get("PATH", "")
+        os.environ["PATH"] = f"{new_path}{os.pathsep}{current_path}"
+
     display_header()
 
     settings = Settings()
     settings.load()
     settings.display_settings()
+
+    if settings.ffmpeg_bin_path:
+        prepend_to_path(settings.ffmpeg_bin_path)
     
     voiceManager = VoiceManager()
     voiceManager.voices_path = settings.voices_path
