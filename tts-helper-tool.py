@@ -628,6 +628,32 @@ class Settings:
         print(f"  Voices Path: '{self.voices_path}'")
         print_colored("=" * 60, "cyan")
 
+def stt():
+    import speech_recognition as sr
+
+    microphone = sr.Microphone()
+
+    r = sr.Recognizer()
+    with microphone as source:
+        if microphone.stream is None:
+            print_colored("Error: could not access microphone. Ensure microphone is connected and privacy settings allow access.", "red");
+            return
+        
+        while True: # read the audio data from the default microphone
+            print("Say something...")
+            audio = r.listen(source)
+            # recognize speech using Google Speech Recognition
+            print("Recognizing")
+            try:
+                # for testing purposes, we're just using the default API key
+                # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
+                # instead of `r.recognize_google(audio)`
+                print(f"Google Speech Recognition thinks you said '{r.recognize_google(audio)}'")
+            except sr.UnknownValueError:
+                print("Google Speech Recognition could not understand audio")
+            except sr.RequestError as e:
+                print("Could not request results from Google Speech Recognition service; {0}".format(e))
+
 def get_file_content(file_path: str) -> str | None:
     """
     Read and return the content of a file.
@@ -702,6 +728,12 @@ def main():
         os.environ["PATH"] = f"{new_path}{os.pathsep}{current_path}"
 
     display_header()
+
+    ############
+    stt()
+    return
+    ############
+
 
     settings = Settings()
     settings.load()
