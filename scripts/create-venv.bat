@@ -1,0 +1,1 @@
+python -m venv "%~dp0..\venv\tht"

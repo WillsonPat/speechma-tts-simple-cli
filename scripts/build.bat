@@ -1,0 +1,1 @@
+pyinstaller %~dp0..\tts-helper-tool.py

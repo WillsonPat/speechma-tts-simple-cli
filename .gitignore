@@ -1,4 +1,5 @@
 settings.json
 build/
 dist/
+venv/
 tts-helper-tool.spec
